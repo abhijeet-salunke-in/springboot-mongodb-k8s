@@ -450,3 +450,3630 @@ abhisalunke16/java-school-app:v1
 
 After Dockerization is verified, we will move to the Kubernetes section.
 
+---
+
+# Part 2 — Dockerizing the Spring Boot Application
+
+> **Project:** Spring Boot + MongoDB Student Management System
+> **Next Stage:** Package the Spring Boot application into a Docker container
+> **Previous Stage:** Part 1 — Local Development & Testing
+
+---
+
+## 1. Why Dockerize the Application?
+
+After successfully testing the Spring Boot application locally, the next step was to package it into a Docker image.
+
+Without Docker, the application depends on the environment where it is running:
+
+* Java version
+* Maven
+* Operating system
+* Environment variables
+* Required libraries
+* Application configuration
+
+Docker solves this by packaging the application and its runtime requirements into a **container image**.
+
+The basic flow is:
+
+```text
+Spring Boot Application
+        |
+        v
+     Maven Build
+        |
+        v
+      app.jar
+        |
+        v
+   Dockerfile
+        |
+        v
+   Docker Image
+        |
+        v
+   Docker Container
+        |
+        v
+ Spring Boot :8080
+```
+
+---
+
+# 2. Check the Project Structure
+
+Before creating the Docker image, we checked the Spring Boot project structure.
+
+A typical structure was:
+
+```text
+springboot-mongodb-k8s/
+│
+├── src/
+│   └── main/
+│       ├── java/
+│       │   └── com/example/school/
+│       │       ├── SchoolApplication.java
+│       │       ├── controller/
+│       │       ├── model/
+│       │       └── repository/
+│       │
+│       └── resources/
+│           └── application.properties
+│
+├── target/
+│   └── *.jar
+│
+├── Dockerfile
+│
+├── pom.xml
+│
+└── README.md
+```
+
+The important files for Dockerization are:
+
+```text
+pom.xml
+Dockerfile
+target/*.jar
+```
+
+---
+
+# 3. Build the Spring Boot Application
+
+Before Dockerizing the application, we first created the executable JAR file.
+
+From the project directory:
+
+```bash
+mvn clean package
+```
+
+If tests were not required during the build:
+
+```bash
+mvn clean package -DskipTests
+```
+
+After a successful build, Maven generated the JAR inside:
+
+```text
+target/
+```
+
+For example:
+
+```text
+target/school-0.0.1-SNAPSHOT.jar
+```
+
+We verified it using:
+
+```bash
+ls -lh target/
+```
+
+The important point is:
+
+> Docker does not compile our Spring Boot source code directly in this simple setup. We first build the application into a JAR and then copy that JAR into the Docker image.
+
+---
+
+# 4. Test the Generated JAR
+
+Before creating the Docker image, we can test the generated JAR directly.
+
+Example:
+
+```bash
+java -jar target/school-0.0.1-SNAPSHOT.jar
+```
+
+The application should start on:
+
+```text
+http://localhost:8080
+```
+
+For the student API:
+
+```text
+http://localhost:8080/students
+```
+
+We can test it using:
+
+```bash
+curl http://localhost:8080/students
+```
+
+If the application returns student data, the JAR is working correctly.
+
+Stop the application using:
+
+```text
+Ctrl + C
+```
+
+---
+
+# 5. Create the Dockerfile
+
+Next, we created a file named:
+
+```text
+Dockerfile
+```
+
+The Dockerfile defines how the Docker image should be created.
+
+Example:
+
+```dockerfile
+FROM eclipse-temurin:21-jre
+
+WORKDIR /app
+
+COPY target/*.jar app.jar
+
+EXPOSE 8080
+
+ENTRYPOINT ["java", "-jar", "app.jar"]
+```
+
+---
+
+# 6. Understand the Dockerfile
+
+Let's understand every instruction.
+
+### `FROM`
+
+```dockerfile
+FROM eclipse-temurin:21-jre
+```
+
+This specifies the base image.
+
+Our Spring Boot application uses Java 21, so we use a Java 21 runtime image.
+
+```text
+Docker Image
+     |
+     +-- Java 21 Runtime
+     |
+     +-- Spring Boot application
+```
+
+---
+
+### `WORKDIR`
+
+```dockerfile
+WORKDIR /app
+```
+
+This creates/sets the working directory inside the container.
+
+Our application will run from:
+
+```text
+/app
+```
+
+---
+
+### `COPY`
+
+```dockerfile
+COPY target/*.jar app.jar
+```
+
+This copies the generated Spring Boot JAR from:
+
+```text
+target/
+```
+
+into the Docker image as:
+
+```text
+/app/app.jar
+```
+
+---
+
+### `EXPOSE`
+
+```dockerfile
+EXPOSE 8080
+```
+
+This documents that the application listens on port:
+
+```text
+8080
+```
+
+Spring Boot's embedded Tomcat is running on port 8080.
+
+---
+
+### `ENTRYPOINT`
+
+```dockerfile
+ENTRYPOINT ["java", "-jar", "app.jar"]
+```
+
+This is the command executed when the container starts.
+
+Effectively, Docker runs:
+
+```bash
+java -jar app.jar
+```
+
+---
+
+# 7. Build the Docker Image
+
+After creating the Dockerfile, we built the Docker image.
+
+From the project root:
+
+```bash
+docker build -t springboot-student-app .
+```
+
+Explanation:
+
+```text
+docker build
+```
+
+Build a Docker image.
+
+```text
+-t springboot-student-app
+```
+
+Give the image the name:
+
+```text
+springboot-student-app
+```
+
+```text
+.
+```
+
+Use the current directory as the Docker build context.
+
+---
+
+# 8. Verify the Docker Image
+
+After the build completed successfully:
+
+```bash
+docker images
+```
+
+We should see something similar to:
+
+```text
+REPOSITORY              TAG       IMAGE ID       CREATED        SIZE
+springboot-student-app latest    xxxxxxxxxxxx   ...            ...
+```
+
+This confirms that our Spring Boot application has been packaged into a Docker image.
+
+---
+
+# 9. Run the Docker Container
+
+Now we started a container from the image.
+
+```bash
+docker run -d \
+  --name springboot-student-app \
+  -p 8080:8080 \
+  springboot-student-app
+```
+
+Here:
+
+```text
+-d
+```
+
+runs the container in detached/background mode.
+
+```text
+--name springboot-student-app
+```
+
+assigns a name to the container.
+
+```text
+-p 8080:8080
+```
+
+maps:
+
+```text
+Host Port       Container Port
+    8080   --->      8080
+```
+
+So requests to:
+
+```text
+http://localhost:8080
+```
+
+are forwarded to port 8080 inside the container.
+
+---
+
+# 10. Check Running Containers
+
+We verified that the container was running:
+
+```bash
+docker ps
+```
+
+Expected output:
+
+```text
+CONTAINER ID   IMAGE                   STATUS        PORTS
+xxxxxxxx       springboot-student-app Up ...        0.0.0.0:8080->8080/tcp
+```
+
+The important information is:
+
+```text
+0.0.0.0:8080->8080/tcp
+```
+
+This means the host's port 8080 is mapped to the container's port 8080.
+
+---
+
+# 11. Check Container Logs
+
+To verify that Spring Boot started correctly inside Docker:
+
+```bash
+docker logs springboot-student-app
+```
+
+We looked for messages indicating that Spring Boot and Tomcat started successfully.
+
+For example:
+
+```text
+Tomcat initialized with port 8080
+```
+
+and:
+
+```text
+Tomcat started
+```
+
+The exact startup messages can vary depending on the Spring Boot version.
+
+---
+
+# 12. Test the Application Inside Docker
+
+Once the container was running, we tested the API:
+
+```bash
+curl http://localhost:8080/students
+```
+
+The application returned student information.
+
+This confirmed:
+
+```text
+Docker Container
+       |
+       v
+Spring Boot
+       |
+       v
+REST API
+       |
+       v
+/students
+```
+
+---
+
+# 13. Important Point About MongoDB
+
+At this stage, there was an important architecture detail.
+
+The Spring Boot application uses MongoDB.
+
+When the application runs locally, it can connect to MongoDB according to the configured MongoDB connection string.
+
+When the Spring Boot application runs inside Docker, the MongoDB address must be reachable **from inside the container**.
+
+For example, this would not automatically mean the same thing:
+
+```text
+localhost:27017
+```
+
+Inside a Docker container:
+
+```text
+localhost
+```
+
+means:
+
+> The Docker container itself.
+
+It does **not** mean the host machine or another container.
+
+Therefore, when we later move the application to Kubernetes, the MongoDB connection is configured using the Kubernetes MongoDB Service/replica-set DNS names rather than relying on `localhost`.
+
+---
+
+# 14. Check the Docker Container
+
+We also checked the container details when troubleshooting:
+
+```bash
+docker ps
+```
+
+and:
+
+```bash
+docker logs springboot-student-app
+```
+
+If the container stops unexpectedly:
+
+```bash
+docker ps -a
+```
+
+Then inspect its logs:
+
+```bash
+docker logs springboot-student-app
+```
+
+This is one of the most important Docker troubleshooting commands.
+
+---
+
+# 15. Stop the Container
+
+When Docker testing was complete:
+
+```bash
+docker stop springboot-student-app
+```
+
+---
+
+# 16. Remove the Container
+
+If we wanted to remove the stopped container:
+
+```bash
+docker rm springboot-student-app
+```
+
+The Docker image itself can be removed with:
+
+```bash
+docker rmi springboot-student-app
+```
+
+---
+
+# 17. Dockerization Flow — Summary
+
+The complete Dockerization process was:
+
+```text
+                 SOURCE CODE
+                     |
+                     v
+              Spring Boot Project
+                     |
+                     v
+                mvn package
+                     |
+                     v
+                 target/*.jar
+                     |
+                     v
+                Dockerfile
+                     |
+                     v
+              docker build
+                     |
+                     v
+              Docker Image
+                     |
+                     v
+               docker run
+                     |
+                     v
+             Docker Container
+                     |
+                     v
+              Spring Boot :8080
+                     |
+                     v
+                REST API
+```
+
+---
+
+# 18. Commands Used in This Stage
+
+### Build the application
+
+```bash
+mvn clean package
+```
+
+or:
+
+```bash
+mvn clean package -DskipTests
+```
+
+### Check JAR
+
+```bash
+ls -lh target/
+```
+
+### Build Docker image
+
+```bash
+docker build -t springboot-student-app .
+```
+
+### Check images
+
+```bash
+docker images
+```
+
+### Start container
+
+```bash
+docker run -d \
+  --name springboot-student-app \
+  -p 8080:8080 \
+  springboot-student-app
+```
+
+### Check container
+
+```bash
+docker ps
+```
+
+### Check logs
+
+```bash
+docker logs springboot-student-app
+```
+
+### Test API
+
+```bash
+curl http://localhost:8080/students
+```
+
+### Stop container
+
+```bash
+docker stop springboot-student-app
+```
+
+### Remove container
+
+```bash
+docker rm springboot-student-app
+```
+
+---
+
+# 19. Result of Part 2
+
+At the end of this stage:
+
+* Spring Boot application was packaged as a JAR.
+* A `Dockerfile` was created.
+* A Docker image was built.
+* A container was started from that image.
+* Port `8080` was exposed/mapped.
+* Spring Boot was tested inside the Docker container.
+* The `/students` REST endpoint was verified.
+* We confirmed that the application could be packaged independently of the local Java environment.
+
+The next stage is to take this Docker image and move toward **Kubernetes deployment**, where we will create the Kubernetes resources for the Spring Boot application and MongoDB.
+
+---
+
+# Part 3 — Kubernetes Setup & MongoDB Replica Set
+
+> **Project:** Spring Boot + MongoDB Student Management System
+> **Stage:** Kubernetes deployment — MongoDB foundation
+> **Previous:** Part 2 — Dockerizing the Spring Boot Application
+> **Next:** Part 4 — Spring Boot Deployment on Kubernetes
+
+---
+
+# 1. Why Kubernetes?
+
+After successfully running the application with Docker, the next step was to deploy the application infrastructure using Kubernetes.
+
+Our final Kubernetes architecture is:
+
+```text
+                    AWS EC2 / Kubernetes Cluster
+                              |
+             +----------------+----------------+
+             |                                 |
+             v                                 v
+       Spring Boot Pods                  MongoDB StatefulSet
+             |                              /    |    \
+             |                             /     |     \
+             |                            v      v      v
+             |                        mongodb-0 mongodb-1 mongodb-2
+             |                            \       |       /
+             |                             \      |      /
+             |                              MongoDB Replica Set
+             |
+             v
+     Spring Boot Service
+       LoadBalancer
+             |
+             v
+          Internet
+```
+
+MongoDB uses a **StatefulSet** because MongoDB nodes need stable identities and persistent storage.
+
+Spring Boot uses a **Deployment** because the application pods are stateless and can be replicated.
+
+---
+
+# 2. Check the Kubernetes Cluster
+
+Before deploying anything, we verified that Kubernetes was available.
+
+```bash
+kubectl get nodes
+```
+
+This confirms that the Kubernetes cluster is accessible.
+
+We also checked the Kubernetes resources:
+
+```bash
+kubectl get all
+```
+
+At this point, MongoDB and Spring Boot had not yet been fully deployed.
+
+---
+
+# 3. Create MongoDB StatefulSet
+
+For MongoDB, we used a Kubernetes **StatefulSet**.
+
+The reason is that each MongoDB replica-set member needs a stable identity.
+
+The three MongoDB pods were:
+
+```text
+mongodb-0
+mongodb-1
+mongodb-2
+```
+
+The important property of StatefulSet naming is:
+
+```text
+mongodb-0
+mongodb-1
+mongodb-2
+```
+
+These names remain predictable even when pods are recreated.
+
+---
+
+# 4. Why Not Use a Deployment for MongoDB?
+
+A normal Deployment is designed for interchangeable/stateless pods.
+
+For example:
+
+```text
+springboot-pod-abc123
+springboot-pod-def456
+```
+
+These pods can generally be replaced by Kubernetes without caring which individual pod is which.
+
+MongoDB replica-set members are different.
+
+MongoDB needs stable identities such as:
+
+```text
+mongodb-0
+mongodb-1
+mongodb-2
+```
+
+Therefore:
+
+```text
+Spring Boot → Deployment
+MongoDB     → StatefulSet
+```
+
+---
+
+# 5. Create a Headless MongoDB Service
+
+The MongoDB StatefulSet uses a **headless Service**.
+
+The service has:
+
+```text
+clusterIP: None
+```
+
+We later verified it with:
+
+```bash
+kubectl get svc
+```
+
+The output contained:
+
+```text
+mongodb    ClusterIP    None    27017/TCP
+```
+
+This is important because Kubernetes creates DNS records for the individual StatefulSet pods.
+
+The MongoDB nodes can therefore be addressed as:
+
+```text
+mongodb-0.mongodb:27017
+mongodb-1.mongodb:27017
+mongodb-2.mongodb:27017
+```
+
+---
+
+# 6. MongoDB Kubernetes DNS
+
+The MongoDB replica set was configured using these Kubernetes DNS names:
+
+```text
+mongodb-0.mongodb:27017
+mongodb-1.mongodb:27017
+mongodb-2.mongodb:27017
+```
+
+The structure is:
+
+```text
+<pod-name>.<headless-service>:27017
+```
+
+Therefore:
+
+```text
+mongodb-0.mongodb
+mongodb-1.mongodb
+mongodb-2.mongodb
+```
+
+resolve to the individual MongoDB pods.
+
+This is one of the key reasons we created the headless MongoDB Service.
+
+---
+
+# 7. Deploy Three MongoDB Pods
+
+After applying the MongoDB Kubernetes YAML:
+
+```bash
+kubectl apply -f yamls/mongodb.yaml
+```
+
+we checked the StatefulSet:
+
+```bash
+kubectl get sts
+```
+
+Eventually we reached:
+
+```text
+NAME      READY
+mongodb   3/3
+```
+
+We also checked the pods:
+
+```bash
+kubectl get pods
+```
+
+Expected result:
+
+```text
+mongodb-0    1/1    Running
+mongodb-1    1/1    Running
+mongodb-2    1/1    Running
+```
+
+This means all three MongoDB instances were running.
+
+---
+
+# 8. Verify MongoDB Replica Set
+
+MongoDB was configured as replica set:
+
+```text
+rs0
+```
+
+The three nodes were:
+
+```text
+mongodb-0.mongodb:27017
+mongodb-1.mongodb:27017
+mongodb-2.mongodb:27017
+```
+
+The replica-set architecture is:
+
+```text
+                    rs0
+                     |
+          +----------+----------+
+          |          |          |
+          v          v          v
+      mongodb-0  mongodb-1  mongodb-2
+       PRIMARY    SECONDARY   SECONDARY
+```
+
+During our verification, `mongodb-0` became the primary.
+
+---
+
+# 9. Check MongoDB Directly
+
+We entered the MongoDB pod:
+
+```bash
+kubectl exec -it mongodb-0 -- mongosh
+```
+
+This connected directly to MongoDB.
+
+The shell showed:
+
+```text
+rs0 [direct: primary] test>
+```
+
+This confirmed that:
+
+```text
+Replica Set = rs0
+mongodb-0  = PRIMARY
+```
+
+---
+
+# 10. Initial MongoDB Authentication Problem
+
+Initially, we attempted to authenticate using:
+
+```bash
+kubectl exec -it mongodb-0 -- mongosh \
+  "mongodb://admin:password123@mongodb-0.mongodb:27017/admin?authSource=admin" \
+  --quiet \
+  --eval 'db.runCommand({connectionStatus:1}).ok'
+```
+
+But MongoDB returned:
+
+```text
+MongoServerError: Authentication failed.
+```
+
+We then investigated the MongoDB users.
+
+---
+
+# 11. Check MongoDB Users
+
+Inside MongoDB, we executed:
+
+```javascript
+db = db.getSiblingDB("admin");
+db.getUsers();
+```
+
+The result was:
+
+```text
+users: []
+```
+
+This was the important discovery.
+
+There was **no `admin` user** in the `admin` database.
+
+Therefore, the Spring Boot application was trying to authenticate with credentials that did not exist in MongoDB.
+
+This explained the earlier error:
+
+```text
+Authentication failed
+```
+
+---
+
+# 12. Create the MongoDB Admin User
+
+We connected to MongoDB without authentication:
+
+```bash
+kubectl exec -it mongodb-0 -- mongosh
+```
+
+Then:
+
+```javascript
+use admin
+```
+
+We created the administrator user:
+
+```javascript
+db.createUser({
+  user: "admin",
+  pwd: "password123",
+  roles: [
+    { role: "root", db: "admin" }
+  ]
+})
+```
+
+MongoDB returned:
+
+```text
+ok: 1
+```
+
+This confirmed that the user was successfully created.
+
+---
+
+# 13. Verify the MongoDB User
+
+We checked the users again:
+
+```bash
+kubectl exec -it mongodb-0 -- mongosh --quiet --eval '
+db = db.getSiblingDB("admin");
+db.getUsers();
+'
+```
+
+This time the result contained:
+
+```text
+user: "admin"
+db: "admin"
+roles: [
+  {
+    role: "root",
+    db: "admin"
+  }
+]
+```
+
+The user also had:
+
+```text
+SCRAM-SHA-1
+SCRAM-SHA-256
+```
+
+authentication mechanisms.
+
+Therefore the MongoDB administrator account now existed.
+
+---
+
+# 14. Test MongoDB Authentication
+
+We tested authentication directly:
+
+```bash
+kubectl exec -it mongodb-0 -- mongosh \
+  "mongodb://admin:password123@mongodb-0.mongodb:27017/admin?authSource=admin" \
+  --quiet \
+  --eval 'db.runCommand({connectionStatus:1}).ok'
+```
+
+The result was:
+
+```text
+1
+```
+
+This confirmed that:
+
+```text
+Username: admin
+Password: password123
+Authentication DB: admin
+```
+
+were working.
+
+---
+
+# 15. Test Replica Set Connection With Authentication
+
+Next, we tested the complete three-node MongoDB connection:
+
+```bash
+kubectl exec -it mongodb-0 -- mongosh \
+  "mongodb://admin:password123@mongodb-0.mongodb:27017,mongodb-1.mongodb:27017,mongodb-2.mongodb:27017/school?replicaSet=rs0&authSource=admin" \
+  --quiet \
+  --eval 'db.students.countDocuments()'
+```
+
+The result was:
+
+```text
+7
+```
+
+This was an important test because it confirmed several things at once:
+
+```text
+                    MongoDB
+                       |
+              +--------+--------+
+              |        |        |
+              v        v        v
+          mongodb-0 mongodb-1 mongodb-2
+              \        |        /
+               \       |       /
+                +------+
+                   rs0
+                    |
+                    v
+                 school
+                    |
+                    v
+                students
+                    |
+                    v
+                    7
+```
+
+So the MongoDB replica set was working and the `students` collection contained 7 documents.
+
+---
+
+# 16. MongoDB Connection String
+
+The connection string used for testing was:
+
+```text
+mongodb://admin:password123@mongodb-0.mongodb:27017,mongodb-1.mongodb:27017,mongodb-2.mongodb:27017/school?replicaSet=rs0&authSource=admin
+```
+
+Let's break it down.
+
+### Username
+
+```text
+admin
+```
+
+### Password
+
+```text
+password123
+```
+
+### MongoDB nodes
+
+```text
+mongodb-0.mongodb:27017
+mongodb-1.mongodb:27017
+mongodb-2.mongodb:27017
+```
+
+### Database
+
+```text
+school
+```
+
+### Replica set
+
+```text
+replicaSet=rs0
+```
+
+### Authentication database
+
+```text
+authSource=admin
+```
+
+Therefore Spring Boot can use the same general connection configuration.
+
+---
+
+# 17. Verify MongoDB Kubernetes Resources
+
+After MongoDB was configured, we checked the StatefulSet:
+
+```bash
+kubectl get sts
+```
+
+Result:
+
+```text
+NAME      READY   AGE
+mongodb   3/3     ...
+```
+
+Then:
+
+```bash
+kubectl get pods
+```
+
+Result:
+
+```text
+mongodb-0    1/1    Running
+mongodb-1    1/1    Running
+mongodb-2    1/1    Running
+```
+
+And:
+
+```bash
+kubectl get svc
+```
+
+The MongoDB service appeared as:
+
+```text
+mongodb    ClusterIP    None    27017/TCP
+```
+
+This confirmed the MongoDB Kubernetes infrastructure was ready.
+
+---
+
+# 18. Why We Fixed MongoDB Before Spring Boot
+
+This order was important.
+
+The architecture is:
+
+```text
+Spring Boot
+     |
+     | MongoDB connection
+     v
+MongoDB Service
+     |
+     v
+MongoDB Replica Set
+     |
+     +---- mongodb-0
+     +---- mongodb-1
+     +---- mongodb-2
+```
+
+If MongoDB authentication or replica-set configuration is broken, Spring Boot will fail when it tries to execute database queries.
+
+This is exactly what happened earlier.
+
+The Spring Boot logs showed:
+
+```text
+MongoSecurityException
+```
+
+and:
+
+```text
+AuthenticationFailed
+```
+
+Then the `/students` endpoint returned:
+
+```text
+HTTP 500
+```
+
+After creating the MongoDB user and verifying authentication, we restarted the Spring Boot deployment.
+
+---
+
+# 19. Important Troubleshooting Lesson
+
+One of the most important debugging steps from this deployment was:
+
+```text
+Spring Boot
+    |
+    | Authentication failed
+    v
+MongoDB
+```
+
+Instead of immediately changing the Spring Boot application, we tested MongoDB directly.
+
+We discovered:
+
+```text
+db.getUsers()
+```
+
+returned:
+
+```text
+users: []
+```
+
+Therefore the problem was not the REST controller.
+
+The actual problem was:
+
+```text
+MongoDB user did not exist
+```
+
+After creating:
+
+```text
+admin
+```
+
+with the correct password, authentication worked.
+
+---
+
+# 20. Final MongoDB Kubernetes Architecture
+
+At the end of Part 3, the MongoDB layer looked like this:
+
+```text
+                         Kubernetes
+                             |
+                             v
+                    Headless Service
+                       mongodb
+                    ClusterIP: None
+                             |
+             +---------------+---------------+
+             |               |               |
+             v               v               v
+        mongodb-0       mongodb-1       mongodb-2
+         PRIMARY         SECONDARY        SECONDARY
+             \               |               /
+              \              |              /
+               +-------------+-------------+
+                             |
+                             v
+                         Replica Set
+                             rs0
+                             |
+                             v
+                           school
+                             |
+                             v
+                         students
+```
+
+---
+
+# 21. Commands Used in Part 3
+
+### Check StatefulSets
+
+```bash
+kubectl get sts
+```
+
+### Check pods
+
+```bash
+kubectl get pods
+```
+
+### Check services
+
+```bash
+kubectl get svc
+```
+
+### Enter MongoDB
+
+```bash
+kubectl exec -it mongodb-0 -- mongosh
+```
+
+### Check MongoDB users
+
+```bash
+kubectl exec -it mongodb-0 -- mongosh --quiet --eval '
+db = db.getSiblingDB("admin");
+db.getUsers();
+'
+```
+
+### Create admin user
+
+```javascript
+use admin
+
+db.createUser({
+  user: "admin",
+  pwd: "password123",
+  roles: [
+    { role: "root", db: "admin" }
+  ]
+})
+```
+
+### Test authentication
+
+```bash
+kubectl exec -it mongodb-0 -- mongosh \
+  "mongodb://admin:password123@mongodb-0.mongodb:27017/admin?authSource=admin" \
+  --quiet \
+  --eval 'db.runCommand({connectionStatus:1}).ok'
+```
+
+### Test replica-set connection
+
+```bash
+kubectl exec -it mongodb-0 -- mongosh \
+  "mongodb://admin:password123@mongodb-0.mongodb:27017,mongodb-1.mongodb:27017,mongodb-2.mongodb:27017/school?replicaSet=rs0&authSource=admin" \
+  --quiet \
+  --eval 'db.students.countDocuments()'
+```
+
+Expected result from our test:
+
+```text
+7
+```
+
+---
+
+# 22. Part 3 Checkpoint
+
+```text
+✅ Kubernetes cluster verified
+✅ MongoDB StatefulSet deployed
+✅ 3 MongoDB pods running
+✅ Headless MongoDB Service created
+✅ MongoDB DNS names verified
+✅ Replica set rs0 configured
+✅ mongodb-0 verified as PRIMARY
+✅ MongoDB users checked
+✅ Authentication problem identified
+✅ admin user created
+✅ MongoDB authentication verified
+✅ 3-node replica-set connection verified
+✅ school database verified
+✅ students collection verified
+✅ 7 student documents found
+```
+
+---
+
+# 23. What We Have Now
+
+At this point, the infrastructure is ready for the Spring Boot application:
+
+```text
+             Kubernetes Cluster
+                     |
+          +----------+----------+
+          |                     |
+          v                     v
+   Spring Boot              MongoDB
+   Deployment              StatefulSet
+                              |
+                       +------+------+
+                       |      |      |
+                       v      v      v
+                      M0     M1     M2
+                       \      |      /
+                        \     |     /
+                         Replica Set
+                            rs0
+```
+
+The next step is to deploy the **Spring Boot Docker image into Kubernetes**, configure its MongoDB connection, create the Spring Boot Deployment, expose it through a Kubernetes Service, and troubleshoot the application until the pods become `Ready`.
+
+---
+
+# Part 4 — Deploying Spring Boot Application on Kubernetes
+
+> **Project:** Spring Boot + MongoDB Student Management System
+> **Stage:** Deploy Spring Boot application on Kubernetes
+> **Previous:** Part 3 — Kubernetes Setup & MongoDB Replica Set
+> **Next:** Part 5 — Exposing the Application Using AWS LoadBalancer & Final Testing
+
+---
+
+# 1. Objective
+
+In Part 3, we prepared MongoDB on Kubernetes:
+
+```text
+MongoDB StatefulSet
+        |
+        +-- mongodb-0
+        +-- mongodb-1
+        +-- mongodb-2
+        |
+        v
+    Replica Set rs0
+```
+
+Now we deploy the Spring Boot application into Kubernetes.
+
+The final application architecture will be:
+
+```text
+                    Internet
+                       |
+                       v
+              AWS LoadBalancer
+                       |
+                       v
+             springboot-service
+                       |
+             +---------+---------+
+             |                   |
+             v                   v
+      Spring Boot Pod     Spring Boot Pod
+             |                   |
+             +---------+---------+
+                       |
+                       v
+                MongoDB Service
+                       |
+                       v
+                 MongoDB rs0
+              /       |       \
+             v        v        v
+        mongodb-0 mongodb-1 mongodb-2
+```
+
+---
+
+# 2. Why Use a Kubernetes Deployment?
+
+Spring Boot is an application that does not need a fixed identity.
+
+If one Spring Boot pod fails, Kubernetes can create another pod.
+
+Therefore, instead of using a StatefulSet, we use a:
+
+```text
+Deployment
+```
+
+For our application, we configured **2 replicas**.
+
+That means Kubernetes maintains:
+
+```text
+2 Spring Boot Pods
+```
+
+running at the same time.
+
+This gives us basic application-level redundancy.
+
+---
+
+# 3. Create the Spring Boot Deployment YAML
+
+Inside the Kubernetes YAML directory, we created a Deployment configuration.
+
+For example:
+
+```text
+yamls/
+├── mongodb.yaml
+├── springboot-deployment.yaml
+└── springboot-service.yaml
+```
+
+The Deployment defines how Kubernetes should run the Spring Boot application.
+
+A typical configuration is:
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: springboot-deploy
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: springboot
+  template:
+    metadata:
+      labels:
+        app: springboot
+    spec:
+      containers:
+        - name: springboot
+          image: <YOUR-DOCKER-IMAGE>
+          ports:
+            - containerPort: 8080
+          env:
+            - name: SPRING_DATA_MONGODB_URI
+              value: "mongodb://admin:password123@mongodb-0.mongodb:27017,mongodb-1.mongodb:27017,mongodb-2.mongodb:27017/school?replicaSet=rs0&authSource=admin"
+```
+
+> Replace `<YOUR-DOCKER-IMAGE>` with the Docker image that was built for the application.
+
+---
+
+# 4. Understand the Deployment Configuration
+
+## `apiVersion`
+
+```yaml
+apiVersion: apps/v1
+```
+
+This tells Kubernetes which API version is being used for the Deployment.
+
+---
+
+## `kind`
+
+```yaml
+kind: Deployment
+```
+
+This tells Kubernetes that this YAML creates a Deployment.
+
+---
+
+## `metadata`
+
+```yaml
+metadata:
+  name: springboot-deploy
+```
+
+The Deployment is named:
+
+```text
+springboot-deploy
+```
+
+We later verified it with:
+
+```bash
+kubectl get deployment
+```
+
+---
+
+# 5. Configure Two Replicas
+
+The Deployment contains:
+
+```yaml
+replicas: 2
+```
+
+This tells Kubernetes:
+
+> Keep two Spring Boot pods running.
+
+Therefore, Kubernetes eventually created:
+
+```text
+springboot-deploy-794f586cb8-4jdlj
+springboot-deploy-794f586cb8-bfpw8
+```
+
+The exact pod names are generated automatically by Kubernetes and can change after a new deployment.
+
+---
+
+# 6. Configure Pod Labels
+
+The pods were given the label:
+
+```yaml
+labels:
+  app: springboot
+```
+
+This label is important because the Kubernetes Service uses it to find the Spring Boot pods.
+
+The relationship is:
+
+```text
+Service
+   |
+   | selector: app=springboot
+   |
+   +--------------------+
+   |                    |
+   v                    v
+Pod 1                Pod 2
+app=springboot       app=springboot
+```
+
+---
+
+# 7. Configure Container Port
+
+The Spring Boot application runs on:
+
+```text
+8080
+```
+
+Therefore the Deployment contains:
+
+```yaml
+ports:
+  - containerPort: 8080
+```
+
+This tells Kubernetes that the application container listens on port 8080.
+
+---
+
+# 8. Configure MongoDB Connection
+
+This was one of the most important parts of the Kubernetes deployment.
+
+The Spring Boot application needs to communicate with MongoDB.
+
+The application therefore uses the MongoDB Kubernetes DNS names:
+
+```text
+mongodb-0.mongodb:27017
+mongodb-1.mongodb:27017
+mongodb-2.mongodb:27017
+```
+
+The complete connection string is:
+
+```text
+mongodb://admin:password123@mongodb-0.mongodb:27017,mongodb-1.mongodb:27017,mongodb-2.mongodb:27017/school?replicaSet=rs0&authSource=admin
+```
+
+The important parameters are:
+
+```text
+Username       = admin
+Password       = password123
+Database       = school
+Replica Set    = rs0
+Auth Database  = admin
+```
+
+This allows Spring Boot to connect to the MongoDB replica set from inside Kubernetes.
+
+---
+
+# 9. Important Difference: localhost
+
+One important lesson during deployment was that we should not use:
+
+```text
+localhost:27017
+```
+
+for MongoDB from the Spring Boot Kubernetes pod.
+
+Inside the Spring Boot container:
+
+```text
+localhost
+```
+
+means:
+
+```text
+Spring Boot container itself
+```
+
+MongoDB is running in different pods.
+
+Therefore we use Kubernetes DNS:
+
+```text
+mongodb-0.mongodb
+mongodb-1.mongodb
+mongodb-2.mongodb
+```
+
+instead.
+
+---
+
+# 10. Apply the Spring Boot Deployment
+
+After creating the Deployment YAML, we applied it:
+
+```bash
+kubectl apply -f yamls/springboot-deployment.yaml
+```
+
+Kubernetes then created the Spring Boot pods.
+
+We checked:
+
+```bash
+kubectl get deployment springboot-deploy
+```
+
+Initially, the pods might take some time to become ready.
+
+---
+
+# 11. Check Spring Boot Pods
+
+We used:
+
+```bash
+kubectl get pods -l app=springboot
+```
+
+Initially, the pods could appear like:
+
+```text
+NAME                              READY   STATUS
+springboot-deploy-xxxxx           0/1     Running
+```
+
+After startup completed, the desired state was:
+
+```text
+NAME                                 READY   STATUS    RESTARTS
+springboot-deploy-794f586cb8-4jdlj   1/1     Running   0
+springboot-deploy-794f586cb8-bfpw8   1/1     Running   0
+```
+
+The important part is:
+
+```text
+1/1 Running
+```
+
+This means the application container is running and ready.
+
+---
+
+# 12. Check the Deployment
+
+We verified the Deployment using:
+
+```bash
+kubectl get deployment springboot-deploy
+```
+
+The final result was:
+
+```text
+NAME                READY   UP-TO-DATE   AVAILABLE
+springboot-deploy   2/2     2            2
+```
+
+This is an important Kubernetes status.
+
+It means:
+
+```text
+READY       = 2/2
+UP-TO-DATE  = 2
+AVAILABLE   = 2
+```
+
+Therefore both replicas were successfully running.
+
+---
+
+# 13. Check All Pods
+
+We then checked all Kubernetes pods:
+
+```bash
+kubectl get pods
+```
+
+The final environment contained:
+
+```text
+mongodb-0                            1/1   Running
+mongodb-1                            1/1   Running
+mongodb-2                            1/1   Running
+
+springboot-deploy-794f586cb8-4jdlj   1/1   Running
+springboot-deploy-794f586cb8-bfpw8    1/1   Running
+```
+
+So we had:
+
+```text
+MongoDB:
+3 pods
+
+Spring Boot:
+2 pods
+
+Total application/database pods:
+5
+```
+
+---
+
+# 14. Check Spring Boot Logs
+
+To verify that Spring Boot started correctly, we used:
+
+```bash
+kubectl logs springboot-deploy-794f586cb8-4jdlj
+```
+
+The logs showed Spring Boot starting with:
+
+```text
+Spring Boot :: (v3.5.4)
+```
+
+and Java:
+
+```text
+Java 21.0.12
+```
+
+Tomcat was initialized on:
+
+```text
+8080
+```
+
+The application also successfully discovered the MongoDB nodes:
+
+```text
+mongodb-0.mongodb:27017
+mongodb-1.mongodb:27017
+mongodb-2.mongodb:27017
+```
+
+---
+
+# 15. Troubleshooting the Initial MongoDB Authentication Failure
+
+During the deployment, the Spring Boot application initially had a problem connecting to MongoDB.
+
+The important error was:
+
+```text
+MongoSecurityException
+```
+
+with:
+
+```text
+AuthenticationFailed
+```
+
+The MongoDB driver reported:
+
+```text
+Authentication failed.
+```
+
+The `/students` endpoint consequently returned:
+
+```text
+HTTP/1.1 500
+```
+
+At first, the Spring Boot pod itself was running, but the application could not successfully perform the database operation.
+
+This distinction is important:
+
+```text
+Pod Running
+      ≠
+Application working correctly
+```
+
+A container can be running while an API request still fails.
+
+---
+
+# 16. Investigate MongoDB
+
+We tested MongoDB directly from the MongoDB pod.
+
+First:
+
+```bash
+kubectl exec -it mongodb-0 -- mongosh
+```
+
+Then we checked:
+
+```javascript
+use admin
+db.getUsers()
+```
+
+Initially the result was:
+
+```text
+users: []
+```
+
+Therefore the expected MongoDB user did not exist.
+
+---
+
+# 17. Create the MongoDB User
+
+We created:
+
+```javascript
+db.createUser({
+  user: "admin",
+  pwd: "password123",
+  roles: [
+    { role: "root", db: "admin" }
+  ]
+})
+```
+
+Then verified:
+
+```bash
+kubectl exec -it mongodb-0 -- mongosh --quiet --eval '
+db = db.getSiblingDB("admin");
+db.getUsers();
+'
+```
+
+The `admin` user was now present.
+
+---
+
+# 18. Test MongoDB Authentication
+
+We tested authentication:
+
+```bash
+kubectl exec -it mongodb-0 -- mongosh \
+  "mongodb://admin:password123@mongodb-0.mongodb:27017/admin?authSource=admin" \
+  --quiet \
+  --eval 'db.runCommand({connectionStatus:1}).ok'
+```
+
+Result:
+
+```text
+1
+```
+
+This confirmed that MongoDB authentication was working.
+
+---
+
+# 19. Test the Replica Set
+
+We then tested all three MongoDB nodes:
+
+```bash
+kubectl exec -it mongodb-0 -- mongosh \
+  "mongodb://admin:password123@mongodb-0.mongodb:27017,mongodb-1.mongodb:27017,mongodb-2.mongodb:27017/school?replicaSet=rs0&authSource=admin" \
+  --quiet \
+  --eval 'db.students.countDocuments()'
+```
+
+Result:
+
+```text
+7
+```
+
+This confirmed that the MongoDB database was accessible through the replica-set connection.
+
+---
+
+# 20. Restart the Spring Boot Deployment
+
+After fixing MongoDB authentication, we restarted the Spring Boot Deployment:
+
+```bash
+kubectl rollout restart deployment springboot-deploy
+```
+
+Kubernetes then gradually replaced the old Spring Boot pods with new pods.
+
+We monitored the pods:
+
+```bash
+kubectl get pods -l app=springboot -w
+```
+
+Eventually the new pods became:
+
+```text
+1/1 Running
+```
+
+---
+
+# 21. Verify the Deployment After Restart
+
+We checked:
+
+```bash
+kubectl get deployment springboot-deploy
+```
+
+Final result:
+
+```text
+NAME                READY   UP-TO-DATE   AVAILABLE
+springboot-deploy   2/2     2            2
+```
+
+Then:
+
+```bash
+kubectl get pods -l app=springboot
+```
+
+Final result:
+
+```text
+NAME                                 READY   STATUS    RESTARTS
+springboot-deploy-794f586cb8-4jdlj   1/1     Running   0
+springboot-deploy-794f586cb8-bfpw8   1/1     Running   0
+```
+
+This confirmed that both replicas were healthy.
+
+---
+
+# 22. Create the Spring Boot Service
+
+The pods themselves are temporary.
+
+Therefore, we needed a Kubernetes Service to provide a stable endpoint.
+
+The Service configuration was:
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: springboot-service
+spec:
+  type: LoadBalancer
+  selector:
+    app: springboot
+  ports:
+    - port: 8080
+      targetPort: 8080
+```
+
+The important parts are:
+
+```text
+Service name:
+springboot-service
+```
+
+and:
+
+```text
+Type:
+LoadBalancer
+```
+
+---
+
+# 23. Why Do We Need a Service?
+
+Without a Service, users would have to connect directly to individual pod IP addresses.
+
+That is not practical because pods can be recreated and their IP addresses can change.
+
+Instead:
+
+```text
+                    Service
+                       |
+             +---------+---------+
+             |                   |
+             v                   v
+          Pod 1                Pod 2
+```
+
+The Service provides a stable access point.
+
+It also distributes traffic between the available Spring Boot pods.
+
+---
+
+# 24. Apply the Service
+
+We applied the Service YAML:
+
+```bash
+kubectl apply -f yamls/springboot-service.yaml
+```
+
+Then checked:
+
+```bash
+kubectl get svc
+```
+
+The final output included:
+
+```text
+NAME                 TYPE           CLUSTER-IP       EXTERNAL-IP
+springboot-service   LoadBalancer   100.66.191.196   <AWS-ELB-DNS>
+```
+
+The service also exposed:
+
+```text
+8080:32413/TCP
+```
+
+The exact NodePort can be dynamically assigned by Kubernetes.
+
+---
+
+# 25. Understand the Service Ports
+
+The Service configuration contains:
+
+```yaml
+port: 8080
+targetPort: 8080
+```
+
+The flow is:
+
+```text
+Client
+  |
+  v
+AWS LoadBalancer
+  |
+  v
+Service :8080
+  |
+  v
+Pod :8080
+  |
+  v
+Spring Boot
+```
+
+So the application continues to listen on:
+
+```text
+8080
+```
+
+inside the container.
+
+---
+
+# 26. Check the Kubernetes Services
+
+We verified:
+
+```bash
+kubectl get svc
+```
+
+The important resources were:
+
+```text
+mongodb
+springboot-service
+```
+
+MongoDB:
+
+```text
+mongodb    ClusterIP    None    27017/TCP
+```
+
+Spring Boot:
+
+```text
+springboot-service    LoadBalancer
+```
+
+This gives us two different networking mechanisms:
+
+```text
+MongoDB
+   |
+   v
+Headless ClusterIP
+   |
+   v
+Internal Kubernetes communication
+
+
+Spring Boot
+   |
+   v
+LoadBalancer
+   |
+   v
+External access
+```
+
+---
+
+# 27. Test the Spring Boot API Inside the Pod
+
+Before testing from outside Kubernetes, we verified that the application itself was responding.
+
+We executed:
+
+```bash
+kubectl exec -it springboot-deploy-794f586cb8-4jdlj -- \
+  curl -s http://localhost:8080/students
+```
+
+The application returned the student JSON data.
+
+For example:
+
+```json
+[
+  {
+    "id": "6a96b96b4f1d60fd451579b9",
+    "name": "Abhijeet Salunke",
+    "email": "abhi@gmail.com",
+    "age": 18,
+    "course": "DevOps"
+  }
+]
+```
+
+along with the other student records.
+
+This confirmed:
+
+```text
+Spring Boot
+    |
+    v
+localhost:8080
+    |
+    v
+/students
+    |
+    v
+MongoDB
+```
+
+was working from inside the pod.
+
+---
+
+# 28. Verify Both Replicas
+
+Because we configured:
+
+```yaml
+replicas: 2
+```
+
+Kubernetes maintained two Spring Boot pods:
+
+```text
+springboot-deploy-...-4jdlj
+springboot-deploy-...-bfpw8
+```
+
+Both showed:
+
+```text
+1/1 Running
+```
+
+and:
+
+```text
+RESTARTS = 0
+```
+
+This confirmed that the application had two healthy replicas.
+
+---
+
+# 29. Final Kubernetes Status
+
+At the end of this stage we checked:
+
+```bash
+kubectl get sts
+```
+
+Result:
+
+```text
+NAME      READY
+mongodb   3/3
+```
+
+Then:
+
+```bash
+kubectl get deploy
+```
+
+Result:
+
+```text
+NAME                READY
+springboot-deploy   2/2
+```
+
+Then:
+
+```bash
+kubectl get pods
+```
+
+Result:
+
+```text
+mongodb-0                            1/1   Running
+mongodb-1                            1/1   Running
+mongodb-2                            1/1   Running
+springboot-deploy-794f586cb8-4jdlj   1/1   Running
+springboot-deploy-794f586cb8-bfpw8   1/1   Running
+```
+
+And:
+
+```bash
+kubectl get svc
+```
+
+Result included:
+
+```text
+mongodb              ClusterIP    None
+springboot-service   LoadBalancer
+```
+
+Therefore the Kubernetes deployment was successfully running.
+
+---
+
+# 30. Final Architecture After Part 4
+
+```text
+                         INTERNET
+                            |
+                            v
+                  AWS LoadBalancer
+                            |
+                            v
+                 springboot-service
+                     :8080
+                            |
+             +--------------+--------------+
+             |                             |
+             v                             v
+     Spring Boot Pod 1             Spring Boot Pod 2
+          :8080                         :8080
+             |                             |
+             +--------------+--------------+
+                            |
+                            v
+                     MongoDB Service
+                       Headless
+                            |
+              +-------------+-------------+
+              |             |             |
+              v             v             v
+          mongodb-0     mongodb-1     mongodb-2
+           PRIMARY      SECONDARY     SECONDARY
+              \             |             /
+               +------------+------------+
+                            |
+                         rs0
+                            |
+                            v
+                         school
+                            |
+                            v
+                        students
+```
+
+---
+
+# 31. Complete Commands Used in Part 4
+
+### Apply Spring Boot Deployment
+
+```bash
+kubectl apply -f yamls/springboot-deployment.yaml
+```
+
+### Apply Spring Boot Service
+
+```bash
+kubectl apply -f yamls/springboot-service.yaml
+```
+
+### Check Deployment
+
+```bash
+kubectl get deployment springboot-deploy
+```
+
+### Check Spring Boot Pods
+
+```bash
+kubectl get pods -l app=springboot
+```
+
+### Watch pod startup
+
+```bash
+kubectl get pods -l app=springboot -w
+```
+
+### Check logs
+
+```bash
+kubectl logs springboot-deploy-<pod-name>
+```
+
+### Restart Deployment
+
+```bash
+kubectl rollout restart deployment springboot-deploy
+```
+
+### Check StatefulSet
+
+```bash
+kubectl get sts
+```
+
+### Check all pods
+
+```bash
+kubectl get pods
+```
+
+### Check services
+
+```bash
+kubectl get svc
+```
+
+### Test API inside the pod
+
+```bash
+kubectl exec -it <springboot-pod> -- \
+  curl -s http://localhost:8080/students
+```
+
+---
+
+# 32. Troubleshooting Lessons
+
+This stage taught us an important Kubernetes debugging sequence.
+
+When the application is not working, don't immediately assume Kubernetes is broken.
+
+Check layer by layer:
+
+```text
+1. Is the Pod Running?
+        |
+        v
+2. Is the Spring Boot application started?
+        |
+        v
+3. Are the logs showing errors?
+        |
+        v
+4. Can Spring Boot connect to MongoDB?
+        |
+        v
+5. Is MongoDB authentication working?
+        |
+        v
+6. Is the MongoDB replica set healthy?
+        |
+        v
+7. Does the /students endpoint work?
+        |
+        v
+8. Is the Kubernetes Service routing traffic?
+        |
+        v
+9. Does the external LoadBalancer work?
+```
+
+In our case, the important failure was:
+
+```text
+Spring Boot
+     |
+     v
+MongoDB authentication
+     |
+     X
+Authentication failed
+```
+
+We fixed the MongoDB user, verified the connection, restarted the Deployment, and the application became healthy.
+
+---
+
+# 33. Part 4 Checkpoint
+
+```text
+✅ Spring Boot Deployment created
+✅ 2 replicas configured
+✅ Spring Boot Docker image deployed
+✅ Container port 8080 configured
+✅ MongoDB connection configured
+✅ MongoDB Kubernetes DNS used
+✅ Initial authentication problem identified
+✅ MongoDB admin user created
+✅ MongoDB authentication verified
+✅ Replica set connection verified
+✅ Spring Boot Deployment restarted
+✅ 2/2 Spring Boot replicas running
+✅ Spring Boot Service created
+✅ LoadBalancer Service configured
+✅ /students API tested inside Kubernetes
+✅ MongoDB + Spring Boot integration verified
+```
+
+---
+
+# 34. Current Project Status
+
+At this point, the project has progressed through:
+
+```text
+PART 1
+Local Spring Boot Development
+        ↓
+Local API Testing
+        ↓
+PART 2
+Dockerization
+        ↓
+Docker Image
+        ↓
+Docker Container Testing
+        ↓
+PART 3
+Kubernetes MongoDB
+        ↓
+3-Node StatefulSet
+        ↓
+MongoDB Replica Set rs0
+        ↓
+Authentication Setup
+        ↓
+PART 4
+Spring Boot Kubernetes Deployment
+        ↓
+2 Application Replicas
+        ↓
+Spring Boot Service
+        ↓
+AWS LoadBalancer
+```
+
+The next part will document the **final external testing phase**: obtaining the AWS LoadBalancer endpoint, opening the application in a browser, testing `/students`, testing the UI/API behavior, and verifying the complete end-to-end flow from **browser → AWS LoadBalancer → Kubernetes Service → Spring Boot → MongoDB Replica Set**.
+
+---
+
+# Part 5 — AWS LoadBalancer, Browser Testing & Final End-to-End Verification
+
+> **Project:** Spring Boot + MongoDB Student Management System
+> **Stage:** External access and final testing
+> **Previous:** Part 4 — Spring Boot Deployment on Kubernetes
+> **Status:** Complete Kubernetes application deployment
+
+---
+
+# 1. Objective
+
+In Part 4, we successfully deployed:
+
+```text
+MongoDB StatefulSet
+        ↓
+3 MongoDB Pods
+        ↓
+MongoDB Replica Set rs0
+        ↓
+Spring Boot Deployment
+        ↓
+2 Spring Boot Pods
+        ↓
+Spring Boot Service
+```
+
+Now we need to verify the complete application from outside the Kubernetes cluster.
+
+The final flow will be:
+
+```text
+Browser
+   |
+   v
+AWS LoadBalancer
+   |
+   v
+springboot-service
+   |
+   v
+Spring Boot Pods
+   |
+   v
+MongoDB Replica Set
+```
+
+---
+
+# 2. Check the Complete Kubernetes Environment
+
+Before testing externally, first verify that all components are running.
+
+Run:
+
+```bash
+kubectl get sts
+```
+
+Expected:
+
+```text
+NAME      READY
+mongodb   3/3
+```
+
+This confirms all three MongoDB pods are running.
+
+---
+
+# 3. Check Spring Boot Deployment
+
+Run:
+
+```bash
+kubectl get deploy
+```
+
+Expected:
+
+```text
+NAME                READY   UP-TO-DATE   AVAILABLE
+springboot-deploy   2/2     2            2
+```
+
+This confirms that both Spring Boot replicas are available.
+
+---
+
+# 4. Check All Pods
+
+Run:
+
+```bash
+kubectl get pods
+```
+
+Expected:
+
+```text
+NAME                                 READY   STATUS
+mongodb-0                            1/1     Running
+mongodb-1                            1/1     Running
+mongodb-2                            1/1     Running
+springboot-deploy-xxxxxxxxxx-xxxxx   1/1     Running
+springboot-deploy-xxxxxxxxxx-xxxxx   1/1     Running
+```
+
+The important points are:
+
+```text
+MongoDB:
+3/3 Running
+
+Spring Boot:
+2/2 Running
+```
+
+---
+
+# 5. Check Kubernetes Services
+
+Run:
+
+```bash
+kubectl get svc
+```
+
+The important services should look similar to:
+
+```text
+NAME                 TYPE           CLUSTER-IP       EXTERNAL-IP
+mongodb              ClusterIP      None             <none>
+springboot-service   LoadBalancer   100.66.x.x       <AWS-ELB-DNS>
+```
+
+The MongoDB service is:
+
+```text
+ClusterIP: None
+```
+
+because it is a **Headless Service**.
+
+The Spring Boot service is:
+
+```text
+Type: LoadBalancer
+```
+
+because we want external access.
+
+---
+
+# 6. Understand the AWS LoadBalancer
+
+When we created:
+
+```yaml
+type: LoadBalancer
+```
+
+Kubernetes requested an external load balancer from AWS.
+
+The service therefore received an AWS LoadBalancer hostname similar to:
+
+```text
+aa68646b24e324a0ca055d20ab574e55-1529857463.ap-south-1.elb.amazonaws.com
+```
+
+The exact hostname is generated by AWS and may be different in another deployment.
+
+---
+
+# 7. Get the LoadBalancer Address
+
+Run:
+
+```bash
+kubectl get svc springboot-service
+```
+
+You should see:
+
+```text
+NAME                 TYPE           CLUSTER-IP       EXTERNAL-IP
+springboot-service   LoadBalancer   100.66.191.196   aa68646b24e324a0ca055d20ab574e55-1529857463.ap-south-1.elb.amazonaws.com
+```
+
+The important value is:
+
+```text
+EXTERNAL-IP
+```
+
+This is the address provided by AWS.
+
+---
+
+# 8. Get Only the LoadBalancer Hostname
+
+You can also run:
+
+```bash
+kubectl get svc springboot-service \
+  -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
+```
+
+This returns only the AWS LoadBalancer hostname.
+
+For example:
+
+```text
+aa68646b24e324a0ca055d20ab574e55-1529857463.ap-south-1.elb.amazonaws.com
+```
+
+---
+
+# 9. Test the API Through the LoadBalancer
+
+Instead of testing:
+
+```text
+localhost:8080
+```
+
+we now test the actual external endpoint.
+
+Run:
+
+```bash
+curl http://<LOADBALANCER-DNS>:8080/students
+```
+
+For example:
+
+```bash
+curl http://aa68646b24e324a0ca055d20ab574e55-1529857463.ap-south-1.elb.amazonaws.com:8080/students
+```
+
+If everything is working, you should receive the student JSON response.
+
+Example:
+
+```json
+[
+  {
+    "id": "6a96b96b4f1d60fd451579b9",
+    "name": "Abhijeet Salunke",
+    "email": "abhi@gmail.com",
+    "age": 18,
+    "course": "DevOps"
+  }
+]
+```
+
+along with the other student records.
+
+---
+
+# 10. What Happened During This Request?
+
+The request travels through multiple Kubernetes/AWS components.
+
+When we execute:
+
+```bash
+curl http://<LOADBALANCER-DNS>:8080/students
+```
+
+the flow is:
+
+```text
+curl / Browser
+       |
+       v
+AWS LoadBalancer
+       |
+       v
+springboot-service
+       |
+       +--------------------+
+       |                    |
+       v                    v
+Spring Boot Pod 1     Spring Boot Pod 2
+       |                    |
+       +---------+----------+
+                 |
+                 v
+          MongoDB Replica Set
+                 |
+        +--------+--------+
+        |        |        |
+        v        v        v
+    mongodb-0 mongodb-1 mongodb-2
+     PRIMARY  SECONDARY  SECONDARY
+```
+
+This is the complete application path.
+
+---
+
+# 11. Open the Application in a Browser
+
+Once the LoadBalancer is available, open:
+
+```text
+http://<LOADBALANCER-DNS>:8080/students
+```
+
+For example:
+
+```text
+http://aa68646b24e324a0ca055d20ab574e55-1529857463.ap-south-1.elb.amazonaws.com:8080/students
+```
+
+The browser should display the JSON response.
+
+You should see the student records stored in MongoDB.
+
+---
+
+# 12. Why the Browser Can Access the Application
+
+The important configuration is:
+
+```yaml
+spec:
+  type: LoadBalancer
+```
+
+Kubernetes communicates with the AWS cloud integration.
+
+AWS creates a load balancer.
+
+The load balancer sends traffic to the Kubernetes Service.
+
+The Service sends traffic to the Spring Boot pods.
+
+Therefore:
+
+```text
+Internet
+   ↓
+AWS
+   ↓
+Kubernetes Service
+   ↓
+Spring Boot
+   ↓
+MongoDB
+```
+
+---
+
+# 13. Verify the Service Endpoints
+
+We can check which pods are behind the Service.
+
+Run:
+
+```bash
+kubectl get endpoints springboot-service
+```
+
+Depending on the Kubernetes version, you may also use:
+
+```bash
+kubectl get endpointslices \
+  -l kubernetes.io/service-name=springboot-service
+```
+
+The endpoints should correspond to the two Spring Boot pods.
+
+This confirms that the Service has healthy backend targets.
+
+---
+
+# 14. Verify Spring Boot Pods Again
+
+Run:
+
+```bash
+kubectl get pods -l app=springboot -o wide
+```
+
+You should see two pods with their internal IP addresses.
+
+For example:
+
+```text
+NAME                                 READY   STATUS    IP
+springboot-deploy-...-4jdlj          1/1     Running   100.96.1.x
+springboot-deploy-...-bfpw8          1/1     Running   100.96.1.x
+```
+
+These pod IPs are internal Kubernetes addresses.
+
+Users on the Internet do **not** connect directly to these IPs.
+
+---
+
+# 15. Verify MongoDB Replica Set
+
+Before considering the project completely healthy, verify the MongoDB replica set again.
+
+Run:
+
+```bash
+kubectl exec -it mongodb-0 -- \
+mongosh --quiet --eval \
+'rs.status().members.map(m => ({name:m.name,stateStr:m.stateStr}))'
+```
+
+Expected result:
+
+```text
+[
+  {
+    name: 'mongodb-0.mongodb:27017',
+    stateStr: 'PRIMARY'
+  },
+  {
+    name: 'mongodb-1.mongodb:27017',
+    stateStr: 'SECONDARY'
+  },
+  {
+    name: 'mongodb-2.mongodb:27017',
+    stateStr: 'SECONDARY'
+  }
+]
+```
+
+This confirms:
+
+```text
+mongodb-0 → PRIMARY
+mongodb-1 → SECONDARY
+mongodb-2 → SECONDARY
+```
+
+---
+
+# 16. Verify Data in MongoDB
+
+We previously confirmed that the database contained 7 students.
+
+We can verify it again:
+
+```bash
+kubectl exec -it mongodb-0 -- mongosh \
+  "mongodb://admin:password123@mongodb-0.mongodb:27017/school?authSource=admin" \
+  --quiet \
+  --eval 'db.students.countDocuments()'
+```
+
+Expected:
+
+```text
+7
+```
+
+Therefore:
+
+```text
+MongoDB
+   ↓
+school database
+   ↓
+students collection
+   ↓
+7 documents
+```
+
+---
+
+# 17. Verify Spring Boot Can Read the Data
+
+Now test the application:
+
+```bash
+kubectl exec -it <springboot-pod> -- \
+curl -s http://localhost:8080/students
+```
+
+If the student records are returned, then:
+
+```text
+Spring Boot → MongoDB
+```
+
+is working.
+
+---
+
+# 18. End-to-End Test
+
+Now test from outside Kubernetes:
+
+```bash
+curl http://<LOADBALANCER-DNS>:8080/students
+```
+
+If the same student data is returned, we have verified:
+
+```text
+External Client
+      ↓
+AWS LoadBalancer
+      ↓
+Kubernetes Service
+      ↓
+Spring Boot
+      ↓
+MongoDB Replica Set
+      ↓
+students collection
+```
+
+This is our complete end-to-end test.
+
+---
+
+# 19. Test Multiple Requests
+
+Because we have:
+
+```text
+Spring Boot replicas = 2
+```
+
+the Service can distribute traffic between the two pods.
+
+Run the API multiple times:
+
+```bash
+for i in {1..10}
+do
+  curl -s http://<LOADBALANCER-DNS>:8080/students > /dev/null
+  echo "Request $i completed"
+done
+```
+
+The important point is that both Spring Boot pods are available behind the Service.
+
+---
+
+# 20. Verify Both Spring Boot Pods Are Healthy
+
+Run:
+
+```bash
+kubectl get pods -l app=springboot
+```
+
+Expected:
+
+```text
+NAME                                 READY   STATUS    RESTARTS
+springboot-deploy-...-4jdlj          1/1     Running   0
+springboot-deploy-...-bfpw8          1/1     Running   0
+```
+
+Both should remain:
+
+```text
+1/1 Running
+```
+
+---
+
+# 21. Check Application Logs
+
+We can check the logs of either Spring Boot pod:
+
+```bash
+kubectl logs <springboot-pod>
+```
+
+For example:
+
+```bash
+kubectl logs springboot-deploy-794f586cb8-4jdlj
+```
+
+The logs should show successful Spring Boot startup and MongoDB connectivity.
+
+---
+
+# 22. Final Kubernetes Architecture
+
+At the end of the project, our Kubernetes architecture is:
+
+```text
+                         INTERNET
+                            |
+                            |
+                            v
+                  +-------------------+
+                  |   AWS LoadBalancer |
+                  +-------------------+
+                            |
+                            v
+                  +-------------------+
+                  | springboot-service |
+                  |    LoadBalancer    |
+                  +-------------------+
+                            |
+                   +--------+--------+
+                   |                 |
+                   v                 v
+          +----------------+  +----------------+
+          | Spring Boot    |  | Spring Boot    |
+          | Pod 1          |  | Pod 2          |
+          | :8080          |  | :8080          |
+          +----------------+  +----------------+
+                   |                 |
+                   +--------+--------+
+                            |
+                            v
+                  +-------------------+
+                  |  MongoDB Headless  |
+                  |      Service       |
+                  +-------------------+
+                            |
+             +--------------+--------------+
+             |              |              |
+             v              v              v
+        +---------+    +---------+    +---------+
+        |mongodb-0|    |mongodb-1|    |mongodb-2|
+        | PRIMARY |    |SECONDARY|    |SECONDARY|
+        +---------+    +---------+    +---------+
+             \              |              /
+              +-------------+-------------+
+                            |
+                            v
+                         rs0
+```
+
+---
+
+# 23. Complete Request Flow
+
+A user accesses:
+
+```text
+http://<LOADBALANCER-DNS>:8080/students
+```
+
+### Step 1 — Browser
+
+The browser sends:
+
+```text
+GET /students
+```
+
+### Step 2 — AWS LoadBalancer
+
+AWS receives the request and forwards it toward the Kubernetes Service.
+
+### Step 3 — Kubernetes Service
+
+`springboot-service` selects pods having:
+
+```text
+app=springboot
+```
+
+### Step 4 — Spring Boot
+
+One of the Spring Boot replicas processes:
+
+```text
+GET /students
+```
+
+### Step 5 — Spring Data MongoDB
+
+The application uses:
+
+```text
+SPRING_DATA_MONGODB_URI
+```
+
+to connect to:
+
+```text
+mongodb-0.mongodb
+mongodb-1.mongodb
+mongodb-2.mongodb
+```
+
+### Step 6 — MongoDB Replica Set
+
+MongoDB identifies the current primary:
+
+```text
+mongodb-0
+```
+
+and retrieves the data.
+
+### Step 7 — Response
+
+MongoDB returns the student records.
+
+Spring Boot converts them to JSON.
+
+The response travels back:
+
+```text
+MongoDB
+   ↓
+Spring Boot
+   ↓
+Service
+   ↓
+AWS LoadBalancer
+   ↓
+Browser
+```
+
+---
+
+# 24. Final Verification Commands
+
+These are the commands to keep in your project notes.
+
+### Nodes
+
+```bash
+kubectl get nodes -o wide
+```
+
+### MongoDB StatefulSet
+
+```bash
+kubectl get sts
+```
+
+### MongoDB Pods
+
+```bash
+kubectl get pods -l app=mongodb
+```
+
+### Replica Set Status
+
+```bash
+kubectl exec -it mongodb-0 -- \
+mongosh --quiet --eval \
+'rs.status().members.map(m => ({name:m.name,stateStr:m.stateStr}))'
+```
+
+### Spring Boot Deployment
+
+```bash
+kubectl get deployment springboot-deploy
+```
+
+### Spring Boot Pods
+
+```bash
+kubectl get pods -l app=springboot
+```
+
+### Spring Boot Service
+
+```bash
+kubectl get svc springboot-service
+```
+
+### Service Endpoints
+
+```bash
+kubectl get endpoints springboot-service
+```
+
+### Application Logs
+
+```bash
+kubectl logs <springboot-pod>
+```
+
+### Internal API Test
+
+```bash
+kubectl exec -it <springboot-pod> -- \
+curl -s http://localhost:8080/students
+```
+
+### External API Test
+
+```bash
+curl http://<LOADBALANCER-DNS>:8080/students
+```
+
+---
+
+# 25. Final Project Verification Checklist
+
+```text
+KUBERNETES
+────────────────────────────────────
+
+☑ Kubernetes cluster running
+☑ Worker node Ready
+☑ Control-plane Ready
+
+MONGODB
+────────────────────────────────────
+
+☑ MongoDB StatefulSet created
+☑ 3 MongoDB replicas running
+☑ Headless Service created
+☑ Persistent volumes created
+☑ Replica Set rs0 initialized
+☑ mongodb-0 PRIMARY
+☑ mongodb-1 SECONDARY
+☑ mongodb-2 SECONDARY
+☑ MongoDB authentication configured
+☑ Student data available
+
+SPRING BOOT
+────────────────────────────────────
+
+☑ Docker image deployed
+☑ Spring Boot Deployment created
+☑ 2 replicas running
+☑ Port 8080 configured
+☑ MongoDB URI configured
+☑ MongoDB authentication working
+☑ Spring Boot connected to MongoDB
+☑ /students endpoint working
+
+NETWORKING
+────────────────────────────────────
+
+☑ Spring Boot ClusterIP/LoadBalancer Service created
+☑ Service selects Spring Boot pods
+☑ AWS LoadBalancer created
+☑ External hostname available
+☑ External /students endpoint tested
+
+FINAL
+────────────────────────────────────
+
+☑ Browser/API can reach application
+☑ Application retrieves MongoDB data
+☑ Complete end-to-end flow verified
+```
+
+---
+
+# 26. Final Result
+
+The project is now deployed as a complete Kubernetes application:
+
+```text
+                    AWS
+                     |
+              LoadBalancer
+                     |
+                     v
+             Spring Boot Service
+                     |
+          +----------+----------+
+          |                     |
+          v                     v
+     Spring Boot            Spring Boot
+       Replica 1              Replica 2
+          |                     |
+          +----------+----------+
+                     |
+                     v
+              MongoDB rs0
+             /     |      \
+            /      |       \
+           v       v        v
+        PRIMARY SECONDARY SECONDARY
+```
+
+The application is no longer running only on the local machine.
+
+It is now:
+
+```text
+Dockerized
+     ↓
+Deployed to Kubernetes
+     ↓
+Connected to MongoDB Replica Set
+     ↓
+Exposed through AWS LoadBalancer
+     ↓
+Accessible externally
+```
+
+## Part 5 Complete ✅
+
+**full project documentation is now organized as:**
+
+```text
+Part 1 → Local Application Setup & Testing
+Part 2 → Dockerization & Docker Testing
+Part 3 → Kubernetes + MongoDB StatefulSet + Replica Set
+Part 4 → Spring Boot Deployment + Service
+Part 5 → AWS LoadBalancer + External/Browser Testing
+```
+
+This completes the **deployment and verification documentation** for the project.
