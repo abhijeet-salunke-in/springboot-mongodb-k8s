@@ -3,9 +3,9 @@ pipeline {
     agent any
 
     environment {
-        DOCKER_USERNAME = 'YOUR_DOCKERHUB_USERNAME'
+        DOCKER_USERNAME = 'abhisalunke16'
 
-        APP_IMAGE = "${DOCKER_USERNAME}/springboot-app"
+        APP_IMAGE = 'abhisalunke16/springboot-mongodb-app'
 
         IMAGE_TAG = "v${BUILD_NUMBER}"
     }
@@ -19,12 +19,25 @@ pipeline {
             }
         }
 
-        stage('Build Application') {
+        stage('Maven Build') {
             steps {
                 sh '''
                     chmod +x mvnw || true
+
                     ./mvnw clean package -DskipTests
                 '''
+            }
+        }
+
+        stage('SonarQube Analysis') {
+            steps {
+                withSonarQubeEnv('SonarQube') {
+                    sh '''
+                        ./mvnw sonar:sonar \
+                        -Dsonar.projectKey=springboot-mongodb-k8s \
+                        -Dsonar.projectName=springboot-mongodb-k8s
+                    '''
+                }
             }
         }
 
@@ -51,9 +64,7 @@ pipeline {
                         echo "$DOCKER_PASSWORD" | docker login \
                         -u "$DOCKER_USER" \
                         --password-stdin
-                    '''
 
-                    sh '''
                         docker push ${APP_IMAGE}:${IMAGE_TAG}
                     '''
                 }
@@ -68,7 +79,7 @@ pipeline {
             }
         }
 
-        stage('Verify Deployment') {
+        stage('Verify Kubernetes Deployment') {
             steps {
                 sh '''
                     kubectl get pods
@@ -80,12 +91,13 @@ pipeline {
     }
 
     post {
+
         success {
-            echo 'Spring Boot pipeline completed successfully.'
+            echo 'Spring Boot CI/CD pipeline completed successfully.'
         }
 
         failure {
-            echo 'Spring Boot pipeline failed.'
+            echo 'Spring Boot CI/CD pipeline failed.'
         }
     }
 }
